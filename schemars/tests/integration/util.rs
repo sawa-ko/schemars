@@ -5,7 +5,7 @@ use schemars::{
     JsonSchema, Schema,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use snapbox::IntoJson;
 use std::{cell::OnceCell, marker::PhantomData, path::Path, sync::OnceLock};
 
@@ -90,6 +90,7 @@ impl<T: JsonSchema> Test<T> {
             CompiledSchema::compile(self.de_schema().as_value()).expect("valid deserialize schema")
         })
     }
+
     fn ser_schema_compiled(&self) -> &CompiledSchema {
         self.ser_schema_compiled.get_or_init(|| {
             CompiledSchema::compile(self.ser_schema().as_value()).expect("valid serialize schema")
@@ -187,25 +188,33 @@ impl<T: JsonSchema + for<'de> Deserialize<'de>> Test<T> {
 }
 
 pub fn arbitrary_values() -> impl Iterator<Item = &'static Value> {
+    fn primitives() -> impl Iterator<Item = Value> {
+        [
+            Value::Null,
+            false.into(),
+            true.into(),
+            0.into(),
+            255.into(),
+            (-1).into(),
+            u64::MAX.into(),
+            f64::consts::PI.into(),
+            "".into(),
+            "0".into(),
+            "3E8".into(),
+            "\tPâté costs “£1”\0".into(),
+        ]
+        .into_iter()
+    }
+
     static VALUES: OnceLock<Vec<Value>> = OnceLock::new();
+
     VALUES
         .get_or_init(|| {
-            vec![
-                Value::Null,
-                false.into(),
-                true.into(),
-                0.into(),
-                255.into(),
-                (-1).into(),
-                u64::MAX.into(),
-                f64::consts::PI.into(),
-                "".into(),
-                "0".into(),
-                "3E8".into(),
-                "Pâté costs £1\r\n\0".into(),
-                Value::Array(Default::default()),
-                Value::Object(Default::default()),
-            ]
+            Vec::from_iter(
+                primitives()
+                    .chain(primitives().map(|p| json!([p])))
+                    .chain(primitives().map(|p| json!({"key": p}))),
+            )
         })
         .iter()
 }
