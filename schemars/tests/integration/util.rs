@@ -7,11 +7,11 @@ use schemars::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use snapbox::IntoJson;
-use std::{cell::OnceCell, marker::PhantomData, path::Path, sync::OnceLock};
+use std::{borrow::Borrow, cell::OnceCell, marker::PhantomData, path::Path, sync::OnceLock};
 
 pub struct Test<T: JsonSchema> {
     settings: SchemaSettings,
-    name: &'static str,
+    name: String,
     phantom: PhantomData<T>,
     de_schema: OnceCell<Schema>,
     ser_schema: OnceCell<Schema>,
@@ -20,7 +20,7 @@ pub struct Test<T: JsonSchema> {
 }
 
 impl<T: JsonSchema> Test<T> {
-    pub fn new(name: &'static str, settings: SchemaSettings) -> Self {
+    pub fn new(name: String, settings: SchemaSettings) -> Self {
         Self {
             settings,
             name,
@@ -33,20 +33,13 @@ impl<T: JsonSchema> Test<T> {
     }
 
     pub fn assert_snapshot(&self) -> &Self {
-        let name = self
-            .name
-            .replace("::", "_")
-            .replace('<', "_")
-            .replace(',', "-")
-            .replace(|c: char| c != '_' && c != '-' && !c.is_alphanumeric(), "");
-
-        let de_path = format!("tests/integration/snapshots/{name}.de.json");
+        let de_path = format!("tests/integration/snapshots/{}.de.json", self.name);
         snapbox::assert_data_eq!(
             self.de_schema().into_json(),
             snapbox::Data::read_from(Path::new(&de_path), None)
         );
 
-        let ser_path = format!("tests/integration/snapshots/{name}.ser.json");
+        let ser_path = format!("tests/integration/snapshots/{}.ser.json", self.name);
         snapbox::assert_data_eq!(
             self.ser_schema().into_json(),
             snapbox::Data::read_from(Path::new(&ser_path), None)
@@ -123,51 +116,28 @@ impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
 
         self
     }
-}
 
-impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de> + Default> Test<T> {
-    pub fn assert_allows_serde_roundtrip_default(&self) -> &Self {
-        self.assert_allows_serde_roundtrip([T::default()])
-    }
-}
-
-impl<T: JsonSchema + for<'de> Deserialize<'de>> Test<T> {
-    pub fn assert_rejects(&self, values: impl IntoIterator<Item = Value>) -> &Self {
+    pub fn assert_matches_deserialize<I>(&self, values: I) -> &Self
+    where
+        I: Iterator,
+        I::Item: Borrow<Value>,
+    {
         let ser_schema = self.ser_schema_compiled();
         let de_schema = self.de_schema_compiled();
 
         for value in values {
-            assert!(
-                !ser_schema.is_valid(&value),
-                "serialize schema should reject invalid value: {value}"
-            );
-
-            assert!(
-                T::deserialize(&value).is_err(),
-                "sanity check - invalid value should fail deserialization: {value}"
-            );
-
-            assert!(
-                !de_schema.is_valid(&value),
-                "deserialize schema should reject invalid value: {value}"
-            );
-        }
-
-        self
-    }
-
-    pub fn assert_matches_deserialize<'a>(&self, values: impl Iterator<Item = &'a Value>) -> &Self {
-        let ser_schema = self.ser_schema_compiled();
-        let de_schema = self.de_schema_compiled();
-
-        for value in values {
-            if T::deserialize(value).is_ok() {
+            let value = value.borrow();
+            if let Ok(deserialized) = T::deserialize(value) {
                 assert!(
                     de_schema.is_valid(value),
                     "deserialize schema should allow value accepted by deserialization: {value}"
                 );
 
-                // Don't check ser_schema because it may be stricter than de_schema
+                let serialized = serde_json::to_value(&deserialized).unwrap();
+                assert!(
+                    ser_schema.is_valid(&serialized),
+                    "serialize schema should allow serialized value: {serialized}"
+                );
 
                 continue;
             }
@@ -184,6 +154,13 @@ impl<T: JsonSchema + for<'de> Deserialize<'de>> Test<T> {
         }
 
         self
+    }
+
+    pub fn assert_allows_serde_roundtrip_default(&self) -> &Self
+    where
+        T: Default,
+    {
+        self.assert_allows_serde_roundtrip([T::default()])
     }
 }
 
@@ -202,6 +179,8 @@ pub fn arbitrary_values() -> impl Iterator<Item = &'static Value> {
             "0".into(),
             "3E8".into(),
             "\tPâté costs “£1”\0".into(),
+            Value::Array(Default::default()),
+            Value::Object(Default::default()),
         ]
         .into_iter()
     }

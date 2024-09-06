@@ -13,7 +13,6 @@ mod prelude {
     pub use crate::util::{arbitrary_nonstring_values, arbitrary_values};
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
-    pub use serde_json::json;
 }
 
 #[macro_export]
@@ -25,10 +24,13 @@ macro_rules! test {
                 fn type_name_of_val<T>(_: T) -> &'static str {
                     core::any::type_name::<T>()
                 }
-                type_name_of_val(f)
+                let test_name = type_name_of_val(f)
                     .trim_end_matches("::f")
-                    .trim_end_matches("::{{closure}}")
-                    .trim_start_matches("integration::")
+                    .split("::")
+                    .last()
+                    .unwrap();
+
+                format!("{}~{}", core::file!(), test_name)
             },
             schemars::generate::SchemaSettings::default(),
         )
