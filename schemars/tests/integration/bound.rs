@@ -27,9 +27,9 @@ where
 fn manual_bound_set() {
     test!(MyContainer<MyIterator>)
         .assert_snapshot()
-        .assert_allows_serde_roundtrip([MyContainer {
+        .assert_allows_ser_roundtrip([MyContainer {
             associated: "test".to_owned(),
             generic: PhantomData,
         }])
-        .assert_matches_deserialize(arbitrary_values());
+        .assert_matches_de_roundtrip(arbitrary_values());
 }

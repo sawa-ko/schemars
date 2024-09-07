@@ -15,24 +15,24 @@ fn chrono() {
     test!(ChronoTypes).assert_snapshot();
 
     test!(Weekday)
-        .assert_allows_serde_roundtrip([Weekday::Mon])
-        .assert_matches_deserialize(arbitrary_values());
+        .assert_allows_ser_roundtrip([Weekday::Mon])
+        .assert_matches_de_roundtrip(arbitrary_values());
 
     test!(DateTime<Utc>)
-        .assert_allows_serde_roundtrip_default()
-        .assert_matches_deserialize(arbitrary_values());
+        .assert_allows_ser_roundtrip_default()
+        .assert_matches_de_roundtrip(arbitrary_values());
 
     test!(NaiveDate)
-        .assert_allows_serde_roundtrip_default()
-        .assert_matches_deserialize(arbitrary_values());
+        .assert_allows_ser_roundtrip_default()
+        .assert_matches_de_roundtrip(arbitrary_values());
 
     test!(NaiveDateTime)
-        .assert_allows_serde_roundtrip_default()
+        .assert_allows_ser_roundtrip_default()
         // Custom format "partial-date-time", so arbitrary strings technically allowed by schema
-        .assert_matches_deserialize(arbitrary_nonstring_values());
+        .assert_matches_de_roundtrip(arbitrary_nonstring_values());
 
     test!(NaiveTime)
-        .assert_allows_serde_roundtrip_default()
+        .assert_allows_ser_roundtrip_default()
         // Custom format "partial-time", so arbitrary strings technically allowed by schema
-        .assert_matches_deserialize(arbitrary_nonstring_values());
+        .assert_matches_de_roundtrip(arbitrary_nonstring_values());
 }

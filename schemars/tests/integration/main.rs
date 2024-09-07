@@ -5,6 +5,7 @@ mod bound;
 mod bytes;
 #[cfg(feature = "chrono04")]
 mod chrono;
+mod contract;
 
 mod util;
 
@@ -13,6 +14,7 @@ mod prelude {
     pub use crate::util::{arbitrary_nonstring_values, arbitrary_values};
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
+    pub use serde_json::{json, Value};
 }
 
 #[macro_export]

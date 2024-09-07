@@ -7,7 +7,9 @@ use schemars::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use snapbox::IntoJson;
-use std::{borrow::Borrow, cell::OnceCell, marker::PhantomData, path::Path, sync::OnceLock};
+use std::{
+    any::type_name, borrow::Borrow, cell::OnceCell, marker::PhantomData, path::Path, sync::OnceLock,
+};
 
 pub struct Test<T: JsonSchema> {
     settings: SchemaSettings,
@@ -92,7 +94,7 @@ impl<T: JsonSchema> Test<T> {
 }
 
 impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
-    pub fn assert_allows_serde_roundtrip(&self, samples: impl IntoIterator<Item = T>) -> &Self {
+    pub fn assert_allows_ser_roundtrip(&self, samples: impl IntoIterator<Item = T>) -> &Self {
         let ser_schema = self.ser_schema_compiled();
         let de_schema = self.de_schema_compiled();
 
@@ -105,7 +107,8 @@ impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
 
             assert!(
                 T::deserialize(&json).is_ok(),
-                "sanity check - ser/de roundtrip: {json}"
+                "sanity check - ser/de roundtrip for {}: {json}",
+                type_name::<T>()
             );
 
             assert!(
@@ -117,9 +120,9 @@ impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
         self
     }
 
-    pub fn assert_matches_deserialize<I>(&self, values: I) -> &Self
+    pub fn assert_allows_de_roundtrip<I>(&self, values: I) -> &Self
     where
-        I: Iterator,
+        I: IntoIterator,
         I::Item: Borrow<Value>,
     {
         let ser_schema = self.ser_schema_compiled();
@@ -127,6 +130,38 @@ impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
 
         for value in values {
             let value = value.borrow();
+            let Ok(deserialized) = T::deserialize(value) else {
+                panic!(
+                    "expected deserialize to succeed for {}: {value}",
+                    type_name::<T>()
+                )
+            };
+
+            assert!(
+                de_schema.is_valid(value),
+                "deserialize schema should allow value accepted by deserialization: {value}"
+            );
+
+            let serialized = serde_json::to_value(&deserialized).unwrap();
+            assert!(
+                ser_schema.is_valid(&serialized),
+                "serialize schema should allow serialized value: {serialized}"
+            );
+        }
+
+        self
+    }
+
+    pub fn assert_matches_de_roundtrip(
+        &self,
+        values: impl IntoIterator<Item = impl Borrow<Value>>,
+    ) -> &Self {
+        let ser_schema = self.ser_schema_compiled();
+        let de_schema = self.de_schema_compiled();
+
+        for value in values {
+            let value = value.borrow();
+
             if let Ok(deserialized) = T::deserialize(value) {
                 assert!(
                     de_schema.is_valid(value),
@@ -156,11 +191,36 @@ impl<T: JsonSchema + Serialize + for<'de> Deserialize<'de>> Test<T> {
         self
     }
 
-    pub fn assert_allows_serde_roundtrip_default(&self) -> &Self
+    pub fn assert_rejects_de<I>(&self, values: I) -> &Self
+    where
+        I: IntoIterator,
+        I::Item: Borrow<Value>,
+    {
+        let de_schema = self.de_schema_compiled();
+
+        for value in values {
+            let value = value.borrow();
+
+            assert!(
+                T::deserialize(value).is_err(),
+                "expected deserialize to succeed for {}: {value}",
+                type_name::<T>()
+            );
+
+            assert!(
+                !de_schema.is_valid(value),
+                "deserialize schema should reject invalid value: {value}"
+            );
+        }
+
+        self
+    }
+
+    pub fn assert_allows_ser_roundtrip_default(&self) -> &Self
     where
         T: Default,
     {
-        self.assert_allows_serde_roundtrip([T::default()])
+        self.assert_allows_ser_roundtrip([T::default()])
     }
 }
 
