@@ -37,7 +37,6 @@ forward_impl!(AtomicUsize => usize);
 mod tests {
     use super::*;
     use crate::schema_for;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn schema_for_atomics() {

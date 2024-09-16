@@ -129,7 +129,6 @@ fn get_meta_ident(meta: &Meta) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use syn::DeriveInput;
 
     #[test]
